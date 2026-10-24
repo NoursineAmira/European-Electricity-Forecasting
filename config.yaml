@@ -1,0 +1,53 @@
+# Countries to model. `country` is the Energy-Charts load code, `bzn` the day-ahead
+# bidding zone. Weather is averaged over a few large demand centres per country.
+countries:
+  de:
+    name: Germany
+    bzn: DE-LU
+    cities:
+      Berlin: [52.52, 13.40]
+      Hamburg: [53.55, 9.99]
+      Munich: [48.14, 11.58]
+      Cologne: [50.94, 6.96]
+      Frankfurt: [50.11, 8.68]
+  fr:
+    name: France
+    bzn: FR
+    cities:
+      Paris: [48.86, 2.35]
+      Lyon: [45.76, 4.84]
+      Marseille: [43.30, 5.37]
+      Lille: [50.63, 3.06]
+      Toulouse: [43.60, 1.44]
+  es:
+    name: Spain
+    bzn: ES
+    cities:
+      Madrid: [40.42, -3.70]
+      Barcelona: [41.39, 2.17]
+      Valencia: [39.47, -0.38]
+      Seville: [37.39, -5.98]
+      Bilbao: [43.26, -2.93]
+  nl:
+    name: Netherlands
+    bzn: NL
+    cities:
+      Amsterdam: [52.37, 4.90]
+      Rotterdam: [51.92, 4.48]
+      Eindhoven: [51.44, 5.47]
+      Groningen: [53.22, 6.57]
+
+# History window. `end: null` means yesterday (UTC).
+start: "2021-01-01"
+end: null
+
+weather_variables:
+  - temperature_2m
+  - relative_humidity_2m
+  - cloud_cover
+  - wind_speed_100m
+  - shortwave_radiation
+
+paths:
+  raw: data/raw
+  processed: data/processed
