@@ -74,15 +74,6 @@ def test_history_and_future_windows():
     assert seen["cols"] == ["temperature_2m_fc"]
 
 
-def test_quantiles_use_only_known_errors():
-    idx = pd.date_range("2025-01-01", periods=24 * 10, freq="h", tz="UTC")
-    fc = pd.DataFrame({"forecast": 0.0, "actual": 1.0}, index=idx)
-    fc.loc["2025-01-09":, "actual"] = 100.0  # errors on day 9 onward must not reach day 10
-    out = backtest.add_quantiles(fc, [0.5], window_days=4)
-    assert (out.loc["2025-01-10", "q0.5"] == 1.0).all()
-    assert out.loc["2025-01-01":"2025-01-03", "q0.5"].isna().all()
-
-
 def test_pinball_and_score():
     y = pd.Series([10.0, 10.0])
     assert pinball(y, pd.Series([8.0, 12.0]), 0.5) == 1.0

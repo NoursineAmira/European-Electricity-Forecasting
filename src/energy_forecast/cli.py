@@ -6,7 +6,7 @@ from . import experiment, pipeline
 from .config import load_config
 from .models import MODEL_NAMES
 
-COMMANDS = ["fetch", "build", "validate", "all", "tune", "backtest", "evaluate"]
+COMMANDS = ["fetch", "build", "validate", "all", "tune", "backtest", "evaluate", "intervals", "significance"]
 
 
 def main() -> None:
@@ -28,8 +28,9 @@ def main() -> None:
             print(experiment.tune(cfg, countries, args.targets).to_string(index=False))
         elif args.command == "backtest":
             experiment.run_backtests(cfg, countries, args.targets, args.models)
-        elif args.command == "evaluate":
-            print(experiment.evaluate(cfg, countries, args.targets).round(1).to_string(index=False))
+        elif args.command in ("evaluate", "intervals", "significance"):
+            table = getattr(experiment, args.command)(cfg, countries, args.targets)
+            print(table.round(3).to_string(index=False))
         else:
             steps = ["fetch", "build", "validate"] if args.command == "all" else [args.command]
             for step in steps:

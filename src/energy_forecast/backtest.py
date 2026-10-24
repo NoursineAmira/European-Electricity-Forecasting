@@ -28,27 +28,7 @@ def run(model: Forecaster, data: pd.DataFrame, issue_times: pd.DatetimeIndex) ->
         history = data.loc[: origin - HOUR]
         future = data.loc[origin : horizon[-1], model.future_columns]
         forecast = model.predict(history, future, horizon)
-        rows.append(pd.DataFrame({"origin": origin, "forecast": forecast.to_numpy()}, index=horizon))
+        frame = forecast.to_frame("forecast") if isinstance(forecast, pd.Series) else forecast
+        rows.append(frame.assign(origin=origin))
     out = pd.concat(rows).rename_axis("timestamp")
     return out.assign(actual=data[model.target].reindex(out.index).to_numpy())
-
-
-def add_quantiles(fc: pd.DataFrame, quantiles: list[float], window_days: int) -> pd.DataFrame:
-    """Intervals from the model's own past errors, per hour of day.
-
-    For target day T, the forecast is issued on T-1, when actuals are known up to T-2.
-    So only errors from target days T-1-window .. T-2 are used: hence the shift(2).
-    """
-    errors = (fc["actual"] - fc["forecast"]).rename("error").to_frame()
-    errors["day"] = errors.index.normalize()
-    errors["hour"] = errors.index.hour
-    grid = errors.pivot(index="day", columns="hour", values="error")
-
-    out = fc.copy()
-    day, hour = fc.index.normalize(), fc.index.hour
-    rolling = grid.rolling(window_days, min_periods=window_days // 2)
-    for q in quantiles:
-        q_err = rolling.quantile(q).shift(2).stack().rename("e")
-        lookup = q_err.reindex(pd.MultiIndex.from_arrays([day, hour])).to_numpy()
-        out[f"q{q:g}"] = fc["forecast"].to_numpy() + lookup
-    return out

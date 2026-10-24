@@ -6,15 +6,21 @@ from datetime import date, timedelta
 from itertools import product
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from . import backtest
 from .config import Config
 from .features import calendar
-from .metrics import score
+from .intervals import conformal, winkler
+from .metrics import pinball, score
 from .models import make
+from .significance import block_bootstrap_skill, daily_mae, diebold_mariano, holm
 
 REFERENCE = "naive_weekly"
+ACI_GAMMA = 0.005  # Gibbs & Candès (2021); not tuned, see docs/05
+GAMMA_SENSITIVITY = (0.001, 0.005, 0.02)
+DM_COMPARISONS = ("naive_weekly", "weekly_mean", "mstl", "lgbm_noweather", "lgbm_oracle")
 
 
 @dataclass(frozen=True)
@@ -35,13 +41,15 @@ def _run(job: Job, cfg: Config) -> str:
 
     issue_times = backtest.origins(job.first_day, job.last_day, bt.issue_hour_utc)
     fc = backtest.run(model, data, issue_times)
-    fc = backtest.add_quantiles(fc, bt.quantiles, bt.warmup_days)
+    if "q0.5" not in fc:
+        fc = conformal(fc, bt.quantiles, bt.warmup_days)
 
     job.out.parent.mkdir(parents=True, exist_ok=True)
     fc.to_parquet(job.out)
     if hasattr(model, "importance"):
         model.importance.rename("gain").to_csv(job.out.with_suffix(".importance.csv"))
-    return f"{job.country} {job.target} {job.model}: {len(fc):,} forecast hours"
+    crossed = f", {model.crossed_hours:,} hours with crossing quantiles" if getattr(model, "quantiles", None) else ""
+    return f"{job.country} {job.target} {job.model}: {len(fc):,} forecast hours{crossed}"
 
 
 def _run_all(cfg: Config, jobs: list[Job]) -> None:
@@ -132,3 +140,76 @@ def evaluate(cfg: Config, countries: list[str], targets: list[str]) -> pd.DataFr
     if importance:
         pd.concat(importance).round(2).to_csv(cfg.results_dir / "feature_importance.csv", index=False)
     return metrics
+
+
+def _test_hours(cfg: Config, df: pd.DataFrame) -> pd.DataFrame:
+    bt = cfg.backtest
+    df = df.loc[pd.Timestamp(bt.test_start, tz="UTC") : pd.Timestamp(bt.test_end, tz="UTC") + pd.Timedelta(hours=23)]
+    return df.dropna(subset=["actual"])
+
+
+def _interval_scores(df: pd.DataFrame, quantiles: list[float]) -> dict:
+    y = df["actual"]
+    inside = lambda lo, hi: float(((y >= df[lo]) & (y <= df[hi])).mean() * 100)
+    return {
+        "coverage_50_%": inside("q0.25", "q0.75"),
+        "coverage_90_%": inside("q0.05", "q0.95"),
+        "width_90": float((df["q0.95"] - df["q0.05"]).mean()),
+        "winkler_90": winkler(df["q0.05"], df["q0.95"], y, alpha=0.1),
+        "pinball": float(np.mean([pinball(y, df[f"q{q:g}"], q) for q in quantiles])),
+    }
+
+
+def intervals(cfg: Config, countries: list[str], targets: list[str]) -> pd.DataFrame:
+    """Compare interval methods around the honest LightGBM, on the test year."""
+    qs, window = cfg.backtest.quantiles, cfg.backtest.warmup_days
+    rows, by_month = [], []
+    for country, target in product(countries, targets):
+        folder = cfg.backtests_dir / country / target
+        point = pd.read_parquet(folder / "lgbm.parquet")
+        qr = pd.read_parquet(folder / "lgbm_qr.parquet")
+
+        methods = {("empirical", 0.0): conformal(point, qs, window), ("qr", 0.0): qr}
+        for gamma in GAMMA_SENSITIVITY:
+            methods["aci", gamma] = conformal(point, qs, window, gamma)
+            methods["cqr", gamma] = conformal(qr, qs, window, gamma, base="quantiles")
+
+        for (method, gamma), fc in methods.items():
+            test = _test_hours(cfg, fc).dropna(subset=["q0.05", "q0.95"])
+            key = {"country": country, "target": target, "method": method, "gamma": gamma}
+            rows.append({**key, **_interval_scores(test, qs), "clipped_%": fc.attrs.get("clipped_share", 0) * 100})
+            if gamma in (0.0, ACI_GAMMA):
+                inside = (test["actual"] >= test["q0.05"]) & (test["actual"] <= test["q0.95"])
+                monthly = inside.groupby(test.index.strftime("%Y-%m")).mean().mul(100)
+                by_month.append(monthly.rename_axis("month").reset_index(name="coverage_90_%").assign(**key))
+
+    table = pd.DataFrame(rows)
+    table["main"] = table["gamma"].isin([0.0, ACI_GAMMA])
+    cfg.results_dir.mkdir(parents=True, exist_ok=True)
+    table.round(3).to_csv(cfg.results_dir / "intervals.csv", index=False)
+    pd.concat(by_month).round(1).to_csv(cfg.results_dir / "coverage_by_month.csv", index=False)
+    return table[table["main"]].drop(columns="main")
+
+
+def significance(cfg: Config, countries: list[str], targets: list[str]) -> pd.DataFrame:
+    """Diebold-Mariano tests of lgbm against each other model, and bootstrap error bars on skill."""
+    tests, cis = [], []
+    for country, target in product(countries, targets):
+        frames = _load_test_period(cfg, country, target)
+        losses = {name: daily_mae(df) for name, df in frames.items()}
+        for other in DM_COMPARISONS:
+            stat, p = diebold_mariano(losses["lgbm"], losses[other])
+            diff = (losses["lgbm"] - losses[other]).mean()
+            tests.append({"country": country, "target": target, "model": "lgbm", "vs": other,
+                          "mae_diff": diff, "dm_stat": stat, "p_value": p})
+        for name, loss in losses.items():
+            skill = 1 - loss.sum() / losses[REFERENCE].sum()
+            ci = {f"ci{b}_{side}": v * 100 for b in (7, 14) for side, v in zip(("lo", "hi"), block_bootstrap_skill(loss, losses[REFERENCE], block=b))}
+            cis.append({"country": country, "target": target, "model": name, "skill_%": skill * 100, **ci})
+
+    tests = pd.DataFrame(tests)
+    tests["p_holm"] = holm(tests["p_value"])
+    cfg.results_dir.mkdir(parents=True, exist_ok=True)
+    tests.to_csv(cfg.results_dir / "significance.csv", index=False, float_format="%.4g")
+    pd.DataFrame(cis).round(1).to_csv(cfg.results_dir / "skill_ci.csv", index=False)
+    return tests

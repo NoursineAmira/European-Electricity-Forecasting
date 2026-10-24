@@ -16,6 +16,7 @@ dependencies = [
     "statsforecast>=2.0",
     "lightgbm>=4.5",
     "holidays>=0.60",
+    "scipy>=1.11",
 ]
 
 [project.optional-dependencies]

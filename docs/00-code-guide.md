@@ -16,8 +16,10 @@ src/energy_forecast/
   models/
     base.py                  the contract every model follows
     baselines.py             the simple models every later model must beat
-    lgbm.py                  LightGBM, in three weather versions
+    lgbm.py                  LightGBM: three weather versions, plus quantile regression (lgbm_qr)
   backtest.py                the exam: replays the past one day at a time
+  intervals.py               turns forecasts into ranges (empirical, ACI, CQR)
+  significance.py            is a lead real? Diebold–Mariano test, bootstrap error bars
   metrics.py                 how forecasts are scored
   experiment.py              runs every model on every country, then scores them
 tests/                       checks the tricky parts without touching the internet
@@ -68,11 +70,11 @@ the same way.
 2. builds `future` with only the allowed columns
 3. asks the model for tomorrow's 24 hours and stores them next to what really happened
 
-**`backtest.add_quantiles`** turns one number into a range. For each hour of the day, it
+**`intervals.conformal`** turns one number into a range. For each hour of the day, it
 looks at the model's misses over the last 8 weeks, e.g. "at 18:00 we usually miss by −1 to
-+2 GW", and adds them to tomorrow's forecast. The tricky bit is `shift(2)`: when forecasting
-day T we're standing on day T−1 at 10:00, so the last *complete* day of errors is T−2.
-A test checks this.
++2 GW", and adds them to tomorrow's forecast. The tricky bit is the 2-day delay: when
+forecasting day T we're standing on day T−1 at 10:00, so the last *complete* day of errors is
+T−2. A test checks this. (Step 5 adds a "thermostat" to the same function; see below.)
 
 **`experiment.evaluate`** only scores hours where *every* model produced a forecast and the
 actual is known. Otherwise a model could look better just by skipping hard hours.
@@ -105,6 +107,31 @@ the current origin.
 on Jan–Jul 2025, before the test year. The winning settings are copied into `lgbm.targets` by
 hand, so `config.yaml` is the record of what was chosen.
 
+## Intervals and significance (step 5)
+
+**One function, three methods.** `intervals.conformal` always does the same thing:
+*bound = starting point + a quantile of recent misses*. The settings make the difference:
+
+| Method | Starting point | Thermostat (`gamma`) |
+|---|---|---|
+| empirical | the point forecast | off (0) |
+| aci | the point forecast | on: widen after misses, tighten after hits |
+| cqr | the quantile model's own 5%…95% values | on |
+
+The thermostat is a single number per hour and quantile, updated every day:
+`level += gamma × (q − hit)`, where `hit` is 1 if the truth landed below the bound. Over time
+the share of hits converges to `q`, whatever the data does.
+
+**`lgbm_qr`** trains 7 LightGBMs, one per quantile (`objective="quantile"`). Sometimes the 90%
+model says less than the 75% one ("crossing"); we sort the 7 values to fix it.
+
+**`significance.py`** works on *daily* errors, never hourly: the 24 hours of one forecast
+share their mistakes, so they're not 24 independent pieces of evidence.
+- `diebold_mariano`: is the average daily difference between two models really non-zero?
+- `holm`: we run 40 tests; this correction stops "1 in 20 is significant by luck".
+- `block_bootstrap_skill`: re-draws the test year in 7-day blocks 2,000 times to see how
+  much the skill number could move.
+
 ## Why parquet and not CSV?
 
 Parquet keeps column types (a timestamp stays a timestamp with its time zone), is about 10x
@@ -126,4 +153,6 @@ energy-forecast all                       # all three in order
 energy-forecast tune                      # pick LightGBM settings on the validation period
 energy-forecast backtest --models naive_weekly mstl --targets load_mw
 energy-forecast evaluate                  # writes results/*.csv and prints the table
+energy-forecast intervals                 # compares interval methods → results/intervals.csv
+energy-forecast significance              # DM tests and skill error bars → results/significance.csv
 ```

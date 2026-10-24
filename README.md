@@ -4,27 +4,30 @@ Probabilistic forecasts of hourly electricity demand and day-ahead prices for Ge
 Spain and the Netherlands. Every model is judged with rolling-origin backtests and calibrated
 prediction intervals, not a single train/test split.
 
-> Status: data pipeline, baselines and LightGBM done. Foundation model and calibrated intervals next.
+> Status: data pipeline, baselines, LightGBM, calibrated intervals and significance tests done. Foundation model (Chronos) and app next.
 
 ## Results so far
 
 Day-ahead forecasts issued at 10:00 UTC for all 24 hours of the next day, replayed every day for
 a full test year (Oct 2025 → Sep 2026). The model only sees weather *forecasts* issued at least
-two days ahead, as a real forecaster would. Skill = % lower error than "same hour last week".
+two days ahead, as a real forecaster would. Skill = % lower error than "same hour last week",
+with 95% block-bootstrap intervals.
 
 | LightGBM (honest weather) | DE | FR | ES | NL |
 |---|---|---|---|---|
-| Load: skill | +52% | +68% | +50% | +49% |
+| Load: skill | +52% [45, 57] | +68% [62, 73] | +50% [44, 54] | +49% [45, 54] |
 | Load: MAPE | 2.6% | 2.2% | 2.4% | 2.6% |
-| Price: skill | +41% | +34% | +36% | +42% |
+| Price: skill | +41% [35, 45] | +34% [28, 40] | +36% [29, 43] | +42% [37, 47] |
 | Price: MAE (€/MWh) | 22.1 | 23.6 | 18.0 | 19.4 |
 
-- **Weather uncertainty costs only 1–4%:** using the forecasts actually available instead of the
-  weather that really happened (an "oracle") barely changes the score.
+- **The lead is real:** LightGBM beats every baseline in all 8 series (Diebold–Mariano, Holm-corrected p < 0.001).
+- **Weather uncertainty costs only 0.4–6%** of error, and the gap is statistically detectable in just 3 of 8 series.
 - **Holidays solved:** on German public holidays the error drops from 10.5 GW ("last week") to 1.4 GW.
-- **Intervals still under-cover** (84–87% for a 90% range): the target of step 5.
+- **Calibrated ranges:** adaptive conformal inference lifts 90%-range coverage from 84–87% to
+  88–90% for load; conformalized quantile regression gives the sharpest well-calibrated price
+  ranges. Plain quantile regression covers only 66–75%.
 
-Details: [docs/03](docs/03-lightgbm-features.md#results-test-year-oct-2025--sep-2026), [docs/02](docs/02-baselines-backtesting.md#results).
+Details: [docs/03](docs/03-lightgbm-features.md#results-test-year-oct-2025--sep-2026), [docs/05](docs/05-intervals-significance.md#results-test-year-oct-2025--sep-2026).
 
 ## Quick start
 
@@ -35,6 +38,8 @@ energy-forecast all          # fetch + build + validate (first run: ~5 min)
 energy-forecast tune         # pick LightGBM settings on Jan–Jul 2025 (optional, slow)
 energy-forecast backtest     # replay the test year for every model (~20 min)
 energy-forecast evaluate     # score them → results/
+energy-forecast intervals    # compare interval methods
+energy-forecast significance # DM tests and skill error bars
 pytest
 ```
 
@@ -60,7 +65,7 @@ See [docs/01-data-pipeline.md](docs/01-data-pipeline.md).
 2. ✅ Baselines (seasonal naive, MSTL) and rolling-origin backtest
 3. ✅ LightGBM with weather, calendar and holiday features
 4. Zero-shot foundation model (Chronos)
-5. Conformal intervals and significance tests
+5. ✅ Conformal intervals and significance tests
 6. Streamlit app
 
 ## Docs
@@ -69,3 +74,4 @@ See [docs/01-data-pipeline.md](docs/01-data-pipeline.md).
 - [01 · Data pipeline](docs/01-data-pipeline.md): spec, design decisions, review
 - [02 · Baselines and backtesting](docs/02-baselines-backtesting.md): the forecasting task, the backtest, metrics
 - [03 · LightGBM with features](docs/03-lightgbm-features.md): weather, calendar, holidays; honest vs oracle weather
+- [05 · Intervals and significance](docs/05-intervals-significance.md): conformal calibration, Diebold–Mariano tests, error bars

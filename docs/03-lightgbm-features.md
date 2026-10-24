@@ -196,7 +196,8 @@ Full tables in [`results/`](../results). Skill = % lower MAE than "same hour las
    2.2–2.6% MAPE. For scale: the official day-ahead load forecasts published by grid operators
    are usually in the 2–3% range. This is a sanity check, not a claim to beat them; their task
    and timing differ.
-2. **The cost of not knowing tomorrow's weather is small: 1–4%.** The honest model is barely
+2. **The cost of not knowing tomorrow's weather is small: 0.4–6%.** (Corrected in step 5; first
+   written as 1–4%, which missed German price at 5.7%.) The honest model is barely
    worse than the oracle (DE load 1,389 vs 1,371 MW). The two-day-ahead temperature forecast,
    averaged over 4–5 cities, misses by only ~0.6 °C, and errors at different cities partly cancel.
    France pays the most (3.5% on load), as expected for the most weather-sensitive country.
