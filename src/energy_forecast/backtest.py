@@ -19,16 +19,18 @@ def target_hours(origin: pd.Timestamp) -> pd.DatetimeIndex:
     return pd.date_range(origin.normalize() + pd.Timedelta(days=1), periods=24, freq="h")
 
 
-def run(model: Forecaster, series: pd.Series, issue_times: pd.DatetimeIndex) -> pd.DataFrame:
-    """Replay the past: for each origin, the model sees only data before it."""
+def run(model: Forecaster, data: pd.DataFrame, issue_times: pd.DatetimeIndex) -> pd.DataFrame:
+    """Replay the past: for each origin, the model sees all data before it,
+    and after it only the columns it declares in `future_columns` (e.g. weather forecasts)."""
     rows = []
     for origin in issue_times:
-        history = series.loc[: origin - HOUR]
         horizon = target_hours(origin)
-        forecast = model.predict(history, horizon)
+        history = data.loc[: origin - HOUR]
+        future = data.loc[origin : horizon[-1], model.future_columns]
+        forecast = model.predict(history, future, horizon)
         rows.append(pd.DataFrame({"origin": origin, "forecast": forecast.to_numpy()}, index=horizon))
     out = pd.concat(rows).rename_axis("timestamp")
-    return out.assign(actual=series.reindex(out.index).to_numpy())
+    return out.assign(actual=data[model.target].reindex(out.index).to_numpy())
 
 
 def add_quantiles(fc: pd.DataFrame, quantiles: list[float], window_days: int) -> pd.DataFrame:

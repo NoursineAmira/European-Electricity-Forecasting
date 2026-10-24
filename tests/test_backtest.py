@@ -5,17 +5,34 @@ import pandas as pd
 import pytest
 
 from energy_forecast import backtest
+from energy_forecast.config import load_config
 from energy_forecast.metrics import pinball, score
-from energy_forecast.models import MODELS
+from energy_forecast.models import MODEL_NAMES, make
 
 POISON = 1e12
+CFG = load_config()
+ORIGIN = pd.Timestamp("2021-02-20 10:00", tz="UTC")
 
 
-def _series(days: int = 70) -> pd.Series:
-    idx = pd.date_range("2025-01-01", periods=24 * days, freq="h", tz="UTC")
+def synthetic_data(days: int = 60) -> pd.DataFrame:
+    idx = pd.date_range("2021-01-01", periods=24 * days, freq="h", tz="UTC")
     rng = np.random.default_rng(0)
-    daily = 100 + 20 * np.sin(2 * np.pi * idx.hour / 24)
-    return pd.Series(daily + rng.normal(0, 1, len(idx)), index=idx)
+    temp = 5 + 5 * np.sin(2 * np.pi * idx.hour / 24) + rng.normal(0, 1, len(idx))
+    data = pd.DataFrame(
+        {
+            "load_mw": 100 + 20 * np.sin(2 * np.pi * idx.hour / 24) - 2 * temp + rng.normal(0, 1, len(idx)),
+            "price_eur_mwh": 80 + rng.normal(0, 10, len(idx)),
+        },
+        index=idx,
+    )
+    for v in CFG.weather_variables:
+        data[v] = temp if v == "temperature_2m" else rng.uniform(0, 100, len(idx))
+        data[f"{v}_fc"] = data[v] + rng.normal(0, 0.5, len(idx))
+    return data
+
+
+def _model(name: str):
+    return make(name, "load_mw", CFG.countries["de"], CFG, {"n_estimators": 20, "n_jobs": 1})
 
 
 def test_origins_and_targets():
@@ -25,30 +42,36 @@ def test_origins_and_targets():
     assert hours[0] == pd.Timestamp("2025-03-01", tz="UTC") and len(hours) == 24
 
 
-@pytest.mark.parametrize("name", list(MODELS))
+@pytest.mark.parametrize("name", MODEL_NAMES)
 def test_models_never_see_the_future(name):
-    s = _series()
-    origin = pd.Timestamp("2025-03-05 10:00", tz="UTC")
-    poisoned = s.copy()
-    poisoned[origin:] = POISON
-    fc = backtest.run(MODELS[name](), poisoned, pd.DatetimeIndex([origin]))
-    assert fc["forecast"].notna().all()
-    assert (fc["forecast"].abs() < POISON / 10).all()
+    """Poison everything after the origin except the columns a model may see: no forecast may change."""
+    clean = synthetic_data()
+    model = _model(name)
+    poisoned = clean.copy()
+    hidden = [c for c in clean if c not in model.future_columns]
+    poisoned.loc[ORIGIN:, hidden] = POISON
+
+    issue = pd.DatetimeIndex([ORIGIN])
+    expected = backtest.run(_model(name), clean, issue)["forecast"]
+    got = backtest.run(model, poisoned, issue)["forecast"]
+    assert got.notna().all()
+    pd.testing.assert_series_equal(got, expected)
 
 
-def test_history_ends_just_before_origin():
-    seen = []
+def test_history_and_future_windows():
+    seen = {}
 
     class Spy:
-        name = "spy"
+        name, target, future_columns = "spy", "load_mw", ["temperature_2m_fc"]
 
-        def predict(self, history, horizon):
-            seen.append(history.index[-1])
+        def predict(self, history, future, horizon):
+            seen.update(last=history.index[-1], future=(future.index[0], future.index[-1]), cols=list(future))
             return pd.Series(0.0, index=horizon)
 
-    origin = pd.Timestamp("2025-03-05 10:00", tz="UTC")
-    backtest.run(Spy(), _series(), pd.DatetimeIndex([origin]))
-    assert seen == [pd.Timestamp("2025-03-05 09:00", tz="UTC")]
+    backtest.run(Spy(), synthetic_data(), pd.DatetimeIndex([ORIGIN]))
+    assert seen["last"] == ORIGIN - pd.Timedelta(hours=1)
+    assert seen["future"] == (ORIGIN, pd.Timestamp("2021-02-21 23:00", tz="UTC"))
+    assert seen["cols"] == ["temperature_2m_fc"]
 
 
 def test_quantiles_use_only_known_errors():

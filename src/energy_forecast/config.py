@@ -14,6 +14,7 @@ class Country:
     code: str
     name: str
     bzn: str
+    tz: str
     cities: dict[str, tuple[float, float]]
 
 
@@ -33,10 +34,12 @@ class Config:
     end: date
     weather_variables: list[str]
     backtest: Backtest
+    lgbm: dict
     raw_dir: Path
     processed_dir: Path
     backtests_dir: Path
     results_dir: Path
+    tuning_dir: Path
 
 
 def load_config(path: Path | None = None) -> Config:
@@ -44,7 +47,7 @@ def load_config(path: Path | None = None) -> Config:
     cfg = yaml.safe_load(path.read_text())
 
     countries = {
-        code: Country(code, c["name"], c["bzn"], {k: tuple(v) for k, v in c["cities"].items()})
+        code: Country(code, c["name"], c["bzn"], c["tz"], {k: tuple(v) for k, v in c["cities"].items()})
         for code, c in cfg["countries"].items()
     }
     yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
@@ -64,8 +67,10 @@ def load_config(path: Path | None = None) -> Config:
             issue_hour_utc=bt["issue_hour_utc"],
             quantiles=bt["quantiles"],
         ),
+        lgbm=cfg["lgbm"],
         raw_dir=ROOT / paths["raw"],
         processed_dir=ROOT / paths["processed"],
         backtests_dir=ROOT / paths["backtests"],
         results_dir=ROOT / paths["results"],
+        tuning_dir=ROOT / paths["tuning"],
     )

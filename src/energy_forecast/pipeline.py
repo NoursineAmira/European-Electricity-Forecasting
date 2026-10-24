@@ -9,8 +9,9 @@ from .config import Config, Country
 from .sources.energy_charts import fetch_power, fetch_price
 from .sources.open_meteo import fetch_weather
 
-SOURCES = ("power", "price", "weather")
+SOURCES = ("power", "price", "weather", "weather_fc")
 TARGETS = ("load_mw", "price_eur_mwh")
+FORECASTS_START = date(2024, 1, 1)  # archived weather forecasts don't go further back
 
 
 def quarters(start: date, end: date) -> list[tuple[date, date]]:
@@ -54,7 +55,7 @@ def _download(cfg: Config, c: Country, source: str, start: date, end: date) -> p
         return fetch_power(c.code, start, end)
     if source == "price":
         return fetch_price(c.bzn, start, end)
-    return fetch_weather(c.cities, start, end, cfg.weather_variables)
+    return fetch_weather(c.cities, start, end, cfg.weather_variables, forecast=source == "weather_fc")
 
 
 def fetch(cfg: Config, countries: list[str]) -> None:
@@ -62,6 +63,8 @@ def fetch(cfg: Config, countries: list[str]) -> None:
         c = cfg.countries[code]
         for start, end in quarters(cfg.start, cfg.end):
             for source in SOURCES:
+                if source == "weather_fc" and end < FORECASTS_START:
+                    continue
                 path = _raw_path(cfg, code, source, start)
                 incomplete = end >= cfg.end - timedelta(days=7)
                 if path.exists() and not incomplete:
@@ -77,7 +80,7 @@ def build(cfg: Config, countries: list[str]) -> None:
     for code in countries:
         parts = []
         for source in SOURCES:
-            files = sorted((cfg.raw_dir / code).glob(f"{source}_*.parquet"))
+            files = sorted((cfg.raw_dir / code).glob(f"{source}_[0-9]*.parquet"))
             if not files:
                 raise FileNotFoundError(f"No raw {source} data for {code}; run fetch first")
             raw = clean(source, pd.concat(pd.read_parquet(f) for f in files))

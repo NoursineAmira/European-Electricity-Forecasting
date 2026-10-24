@@ -3,6 +3,7 @@
 countries:
   de:
     name: Germany
+    tz: Europe/Berlin
     bzn: DE-LU
     cities:
       Berlin: [52.52, 13.40]
@@ -12,6 +13,7 @@ countries:
       Frankfurt: [50.11, 8.68]
   fr:
     name: France
+    tz: Europe/Paris
     bzn: FR
     cities:
       Paris: [48.86, 2.35]
@@ -21,6 +23,7 @@ countries:
       Toulouse: [43.60, 1.44]
   es:
     name: Spain
+    tz: Europe/Madrid
     bzn: ES
     cities:
       Madrid: [40.42, -3.70]
@@ -30,6 +33,7 @@ countries:
       Bilbao: [43.26, -2.93]
   nl:
     name: Netherlands
+    tz: Europe/Amsterdam
     bzn: NL
     cities:
       Amsterdam: [52.37, 4.90]
@@ -55,8 +59,38 @@ backtest:
   issue_hour_utc: 10
   quantiles: [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95]
 
+lgbm:
+  retrain_days: 7
+  base_params:
+    n_estimators: 500
+    learning_rate: 0.05
+    min_child_samples: 50
+    subsample: 0.8
+    subsample_freq: 1
+    colsample_bytree: 0.8
+    n_jobs: 1  # one thread per process; the backtest already runs one process per core
+    verbose: -1
+  # Per-target settings, chosen by `energy-forecast tune` on the validation period
+  # (results/tuning.csv). Load: L2, 127 leaves, from 2021. Price: L1, 31 leaves, from 2023.
+  targets:
+    load_mw:
+      train_start: "2021-01-15"
+      params: {objective: l2, num_leaves: 127}
+    price_eur_mwh:
+      train_start: "2023-01-01"
+      params: {objective: l1, num_leaves: 31}
+  tuning:
+    start: "2025-01-01"
+    end: "2025-07-31"
+    retrain_days: 28
+    grid:
+      objective: [l1, l2]
+      num_leaves: [31, 127]
+      train_start: ["2021-01-15", "2023-01-01"]
+
 paths:
   raw: data/raw
   processed: data/processed
   backtests: data/backtests
   results: results
+  tuning: data/tuning

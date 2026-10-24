@@ -4,20 +4,27 @@ Probabilistic forecasts of hourly electricity demand and day-ahead prices for Ge
 Spain and the Netherlands. Every model is judged with rolling-origin backtests and calibrated
 prediction intervals, not a single train/test split.
 
-> Status: data pipeline and baselines done. Feature-based models in progress.
+> Status: data pipeline, baselines and LightGBM done. Foundation model and calibrated intervals next.
 
 ## Results so far
 
 Day-ahead forecasts issued at 10:00 UTC for all 24 hours of the next day, replayed every day for
-a full test year (Oct 2025 → Sep 2026). Skill = % lower error than "same hour last week".
+a full test year (Oct 2025 → Sep 2026). The model only sees weather *forecasts* issued at least
+two days ahead, as a real forecaster would. Skill = % lower error than "same hour last week".
 
-| Load, best baseline (MSTL) | DE | FR | ES | NL |
+| LightGBM (honest weather) | DE | FR | ES | NL |
 |---|---|---|---|---|
-| Skill vs last week | +20% | +49% | +15% | +11% |
-| MAPE | 4.4% | 3.6% | 4.2% | 4.6% |
+| Load: skill | +52% | +68% | +50% | +49% |
+| Load: MAPE | 2.6% | 2.2% | 2.4% | 2.6% |
+| Price: skill | +41% | +34% | +36% | +42% |
+| Price: MAE (€/MWh) | 22.1 | 23.6 | 18.0 | 19.4 |
 
-Prices are harder (best skill 14–20%), and the baseline 90% intervals under-cover (79–87%).
-Both are targets for the next steps. Details: [docs/02](docs/02-baselines-backtesting.md#results).
+- **Weather uncertainty costs only 1–4%:** using the forecasts actually available instead of the
+  weather that really happened (an "oracle") barely changes the score.
+- **Holidays solved:** on German public holidays the error drops from 10.5 GW ("last week") to 1.4 GW.
+- **Intervals still under-cover** (84–87% for a 90% range): the target of step 5.
+
+Details: [docs/03](docs/03-lightgbm-features.md#results-test-year-oct-2025--sep-2026), [docs/02](docs/02-baselines-backtesting.md#results).
 
 ## Quick start
 
@@ -25,7 +32,8 @@ Both are targets for the next steps. Details: [docs/02](docs/02-baselines-backte
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e '.[dev]'
 energy-forecast all          # fetch + build + validate (first run: ~5 min)
-energy-forecast backtest     # replay the test year for every model (~10 min)
+energy-forecast tune         # pick LightGBM settings on Jan–Jul 2025 (optional, slow)
+energy-forecast backtest     # replay the test year for every model (~20 min)
 energy-forecast evaluate     # score them → results/
 pytest
 ```
@@ -50,7 +58,7 @@ See [docs/01-data-pipeline.md](docs/01-data-pipeline.md).
 
 1. ✅ Data pipeline
 2. ✅ Baselines (seasonal naive, MSTL) and rolling-origin backtest
-3. LightGBM with lag and calendar features
+3. ✅ LightGBM with weather, calendar and holiday features
 4. Zero-shot foundation model (Chronos)
 5. Conformal intervals and significance tests
 6. Streamlit app
@@ -60,3 +68,4 @@ See [docs/01-data-pipeline.md](docs/01-data-pipeline.md).
 - [How the code is organised](docs/00-code-guide.md)
 - [01 · Data pipeline](docs/01-data-pipeline.md): spec, design decisions, review
 - [02 · Baselines and backtesting](docs/02-baselines-backtesting.md): the forecasting task, the backtest, metrics
+- [03 · LightGBM with features](docs/03-lightgbm-features.md): weather, calendar, holidays; honest vs oracle weather
