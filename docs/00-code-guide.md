@@ -12,8 +12,15 @@ src/energy_forecast/
     http.py                  one function: download JSON, retry if the network fails
     energy_charts.py         electricity data (load, solar, wind, prices)
     open_meteo.py            weather data
-tests/test_pipeline.py       checks the tricky parts without touching the internet
+  models/
+    base.py                  the contract every model follows
+    baselines.py             the simple models every later model must beat
+  backtest.py                the exam: replays the past one day at a time
+  metrics.py                 how forecasts are scored
+  experiment.py              runs every model on every country, then scores them
+tests/                       checks the tricky parts without touching the internet
 docs/                        one file per project step: spec, decisions, review
+results/                     score tables (committed; small and derived)
 ```
 
 ## The flow, step by step
@@ -42,6 +49,26 @@ redo that piece.
 3. place everything on a complete hourly grid from `start` to `end`, so a missing hour becomes
    an empty cell you can see, instead of a row that silently isn't there
 
+## Models and the backtest (step 2)
+
+**A model is anything with a `predict(history, horizon)` method.** It gets the past as a
+series and the 24 hours to forecast, and returns 24 numbers. That's the whole contract, in
+`models/base.py`. A one-line rule and a deep network plug in the same way.
+
+**`backtest.run`** is the exam. For each day it:
+1. cuts the data at 09:00 (`series.loc[: origin - 1h]`): the model *physically* can't see later data
+2. asks the model for tomorrow's 24 hours
+3. stores the forecast next to what really happened
+
+**`backtest.add_quantiles`** turns one number into a range. For each hour of the day, it
+looks at the model's misses over the last 8 weeks, e.g. "at 18:00 we usually miss by −1 to
++2 GW", and adds them to tomorrow's forecast. The tricky bit is `shift(2)`: when forecasting
+day T we're standing on day T−1 at 10:00, so the last *complete* day of errors is T−2.
+A test checks this.
+
+**`experiment.evaluate`** only scores hours where *every* model produced a forecast and the
+actual is known. Otherwise a model could look better just by skipping hard hours.
+
 ## Why parquet and not CSV?
 
 Parquet keeps column types (a timestamp stays a timestamp with its time zone), is about 10x
@@ -60,4 +87,6 @@ energy-forecast fetch --countries de fr   # only some countries
 energy-forecast build
 energy-forecast validate
 energy-forecast all                       # all three in order
+energy-forecast backtest --models naive_weekly mstl --targets load_mw
+energy-forecast evaluate                  # writes results/*.csv and prints the table
 ```

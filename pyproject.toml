@@ -13,6 +13,7 @@ dependencies = [
     "pyarrow>=16",
     "requests>=2.31",
     "pyyaml>=6",
+    "statsforecast>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -26,3 +27,5 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# pandas 2.x vs NumPy >= 2.5; harmless. statsforecast doesn't support pandas 3 yet.
+filterwarnings = ["ignore:The 'generic' unit for NumPy timedelta:DeprecationWarning"]

@@ -18,13 +18,25 @@ class Country:
 
 
 @dataclass(frozen=True)
+class Backtest:
+    test_start: date
+    test_end: date
+    warmup_days: int
+    issue_hour_utc: int
+    quantiles: list[float]
+
+
+@dataclass(frozen=True)
 class Config:
     countries: dict[str, Country]
     start: date
     end: date
     weather_variables: list[str]
+    backtest: Backtest
     raw_dir: Path
     processed_dir: Path
+    backtests_dir: Path
+    results_dir: Path
 
 
 def load_config(path: Path | None = None) -> Config:
@@ -37,12 +49,23 @@ def load_config(path: Path | None = None) -> Config:
     }
     yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
     end = date.fromisoformat(cfg["end"]) if cfg.get("end") else yesterday
+    bt = cfg["backtest"]
+    paths = cfg["paths"]
 
     return Config(
         countries=countries,
         start=date.fromisoformat(cfg["start"]),
         end=end,
         weather_variables=cfg["weather_variables"],
-        raw_dir=ROOT / cfg["paths"]["raw"],
-        processed_dir=ROOT / cfg["paths"]["processed"],
+        backtest=Backtest(
+            test_start=date.fromisoformat(bt["test_start"]),
+            test_end=date.fromisoformat(bt["test_end"]),
+            warmup_days=bt["warmup_days"],
+            issue_hour_utc=bt["issue_hour_utc"],
+            quantiles=bt["quantiles"],
+        ),
+        raw_dir=ROOT / paths["raw"],
+        processed_dir=ROOT / paths["processed"],
+        backtests_dir=ROOT / paths["backtests"],
+        results_dir=ROOT / paths["results"],
     )
