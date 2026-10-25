@@ -18,10 +18,13 @@ concurrency:
 jobs:
   live:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # The first run downloads five years of data, slowly from GitHub's shared IPs. Later runs
+    # only fetch the latest quarter.
+    timeout-minutes: 300
     env:
       REMOTE: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
       PYTHONWARNINGS: ignore
+      PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -34,7 +37,7 @@ jobs:
       - run: pip install -e .
 
       - name: Restore downloaded data
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: data/raw
           key: raw-${{ github.run_id }}
@@ -44,7 +47,16 @@ jobs:
         run: git clone -q --depth 1 --branch live "$REMOTE" live || mkdir live
 
       - name: Forecast tomorrow
+        timeout-minutes: 270  # shorter than the job, so the save step below still gets to run
         run: energy-forecast live --out live
+
+      # Saved even when the forecast fails or times out, so the next run continues the download.
+      - name: Save downloaded data
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/raw
+          key: raw-${{ github.run_id }}
 
       - name: Publish to the live branch
         working-directory: live
