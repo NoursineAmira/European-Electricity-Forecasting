@@ -173,7 +173,10 @@ no errors), plus a Track record run on 10 days of synthetic history. A full loca
    token at GitHub → Settings → Developer settings → Personal access tokens with the `repo` and
    `workflow` scopes, and use it as the password on the next push.
 2. **Run the job once by hand:** repo → Actions → "Live forecast" → "Run workflow". The first
-   run downloads all history (~5–10 min more than later runs). When it finishes, the repo has a
-   `live` branch.
+   run downloads all history. On GitHub's servers that took **1 h 35 min** (2026-10-25), mostly
+   Open-Meteo answering slowly (72 timeouts, all weather requests). The downloaded data is cached,
+   even if a run fails, so later runs only fetch the latest quarter. When it finishes, the repo
+   has a `live` branch.
 3. **Deploy the app:** share.streamlit.io → "Create app" → pick the repo, branch `main`, main
-   file `app/streamlit_app.py` → Deploy. Then put the app's URL in the README.
+   file `app/streamlit_app.py` → Deploy. Deployed at
+   [eu-electricity-forecast.streamlit.app](https://eu-electricity-forecast.streamlit.app/).

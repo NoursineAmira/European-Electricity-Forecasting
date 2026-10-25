@@ -1,5 +1,7 @@
 # European Electricity Forecasting
 
+**Live app: [eu-electricity-forecast.streamlit.app](https://eu-electricity-forecast.streamlit.app/)**
+
 Probabilistic forecasts of hourly electricity demand and day-ahead prices for Germany, France,
 Spain and the Netherlands. Every model is judged with rolling-origin backtests and calibrated
 prediction intervals, not a single train/test split.
@@ -32,7 +34,7 @@ Details: [docs/03](docs/03-lightgbm-features.md#results-test-year-oct-2025--sep-
 ## Live app
 
 Tomorrow's forecast, published every day, plus a public track record and the backtest explorer:
-**[app link: added after deployment]**. GitHub Actions runs the forecast at 12:00 and 18:00 UTC
+**[eu-electricity-forecast.streamlit.app](https://eu-electricity-forecast.streamlit.app/)**. GitHub Actions runs the forecast at 12:00 and 18:00 UTC
 ([workflow](.github/workflows/live.yml)); the published files live on the
 [`live` branch](../../tree/live). The free hosting sleeps after a few quiet days, so the first
 visit may take ~30 s to wake it up.
