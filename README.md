@@ -4,7 +4,7 @@ Probabilistic forecasts of hourly electricity demand and day-ahead prices for Ge
 Spain and the Netherlands. Every model is judged with rolling-origin backtests and calibrated
 prediction intervals, not a single train/test split.
 
-> Status: data pipeline, baselines, LightGBM, calibrated intervals and significance tests done. Foundation model (Chronos) and app next.
+> Status: data pipeline, baselines, LightGBM, calibrated intervals, significance tests and the live app done. Foundation model (Chronos) next.
 
 ## Results so far
 
@@ -28,6 +28,14 @@ with 95% block-bootstrap intervals.
   ranges. Plain quantile regression covers only 66–75%.
 
 Details: [docs/03](docs/03-lightgbm-features.md#results-test-year-oct-2025--sep-2026), [docs/05](docs/05-intervals-significance.md#results-test-year-oct-2025--sep-2026).
+
+## Live app
+
+Tomorrow's forecast, published every day, plus a public track record and the backtest explorer:
+**[app link: added after deployment]**. GitHub Actions runs the forecast at 12:00 and 18:00 UTC
+([workflow](.github/workflows/live.yml)); the published files live on the
+[`live` branch](../../tree/live). The free hosting sleeps after a few quiet days, so the first
+visit may take ~30 s to wake it up.
 
 ## Quick start
 
@@ -66,7 +74,7 @@ See [docs/01-data-pipeline.md](docs/01-data-pipeline.md).
 3. ✅ LightGBM with weather, calendar and holiday features
 4. Zero-shot foundation model (Chronos)
 5. ✅ Conformal intervals and significance tests
-6. Streamlit app
+6. ✅ Live forecasts and Streamlit app
 
 ## Docs
 
@@ -75,3 +83,4 @@ See [docs/01-data-pipeline.md](docs/01-data-pipeline.md).
 - [02 · Baselines and backtesting](docs/02-baselines-backtesting.md): the forecasting task, the backtest, metrics
 - [03 · LightGBM with features](docs/03-lightgbm-features.md): weather, calendar, holidays; honest vs oracle weather
 - [05 · Intervals and significance](docs/05-intervals-significance.md): conformal calibration, Diebold–Mariano tests, error bars
+- [06 · The app](docs/06-app.md): live daily forecasts, public track record, backtest explorer

@@ -6,3 +6,6 @@ __pycache__/
 
 # Data is rebuilt from the APIs; some sources forbid redistribution.
 data/
+
+# Output of `energy-forecast live`; published on the `live` branch, not main.
+live/

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -55,6 +55,11 @@ def _download(cfg: Config, c: Country, source: str, start: date, end: date) -> p
         return fetch_power(c.code, start, end)
     if source == "price":
         return fetch_price(c.bzn, start, end)
+    if source == "weather":
+        end = min(end, datetime.now(timezone.utc).date())  # the archive has no future dates
+        if end < start:
+            empty = pd.DatetimeIndex([], tz="UTC", name="timestamp")
+            return pd.DataFrame(columns=cfg.weather_variables, index=empty, dtype="float64")
     return fetch_weather(c.cities, start, end, cfg.weather_variables, forecast=source == "weather_fc")
 
 

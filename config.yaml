@@ -88,6 +88,14 @@ lgbm:
       num_leaves: [31, 127]
       train_start: ["2021-01-15", "2023-01-01"]
 
+# Daily public forecasts (energy-forecast live). Spanish prices are not published: their
+# licence forbids sharing them in raw or derived form.
+live:
+  replay_days: 120
+  publish:
+    load_mw: {countries: [de, fr, es, nl], model: lgbm, intervals: aci}
+    price_eur_mwh: {countries: [de, fr, nl], model: lgbm_qr, intervals: cqr}
+
 paths:
   raw: data/raw
   processed: data/processed

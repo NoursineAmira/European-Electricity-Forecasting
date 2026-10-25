@@ -22,6 +22,9 @@ src/energy_forecast/
   significance.py            is a lead real? Diebold–Mariano test, bootstrap error bars
   metrics.py                 how forecasts are scored
   experiment.py              runs every model on every country, then scores them
+  live.py                    the daily public forecast (step 6)
+app/streamlit_app.py         the website: reads CSVs, never trains a model
+.github/workflows/live.yml   runs `energy-forecast live` twice a day on GitHub's servers
 tests/                       checks the tricky parts without touching the internet
 docs/                        one file per project step: spec, decisions, review
 results/                     score tables (committed; small and derived)
@@ -132,6 +135,27 @@ share their mistakes, so they're not 24 independent pieces of evidence.
 - `block_bootstrap_skill`: re-draws the test year in 7-day blocks 2,000 times to see how
   much the skill number could move.
 
+## The live forecast and the app (step 6)
+
+**`live.run_live`** is the backtest, pointed at today. It downloads the newest data, replays
+the last 120 days with the same code as the exam (same cut at 09:00, same weekly retraining),
+adds the ranges (ACI for load, CQR for price), and keeps only tomorrow's 24 hours. Because it
+rebuilds everything each time, a missed day fixes itself the next day.
+
+**`history.csv`** grows by one issue per day. `merge_history` replaces a same-day issue (the
+18:00 run overwrites the 12:00 one) and keeps all earlier days; `fill_actuals` writes in the
+real values as they arrive. Nothing is ever backfilled, so the track record only contains
+forecasts that existed before the truth did.
+
+**The app** is one file with four pages. It reads the `live` branch straight from GitHub
+(cached for an hour) and the `results/` tables from the repo. To run it on your machine against
+a local folder:
+
+```bash
+pip install -r app/requirements.txt
+LIVE_DIR=live streamlit run app/streamlit_app.py
+```
+
 ## Why parquet and not CSV?
 
 Parquet keeps column types (a timestamp stays a timestamp with its time zone), is about 10x
@@ -155,4 +179,5 @@ energy-forecast backtest --models naive_weekly mstl --targets load_mw
 energy-forecast evaluate                  # writes results/*.csv and prints the table
 energy-forecast intervals                 # compares interval methods → results/intervals.csv
 energy-forecast significance              # DM tests and skill error bars → results/significance.csv
+energy-forecast live --out live           # tomorrow's public forecast → live/*.csv
 ```

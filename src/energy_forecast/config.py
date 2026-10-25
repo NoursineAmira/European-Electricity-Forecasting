@@ -35,6 +35,7 @@ class Config:
     weather_variables: list[str]
     backtest: Backtest
     lgbm: dict
+    live: dict
     raw_dir: Path
     processed_dir: Path
     backtests_dir: Path
@@ -68,6 +69,7 @@ def load_config(path: Path | None = None) -> Config:
             quantiles=bt["quantiles"],
         ),
         lgbm=cfg["lgbm"],
+        live=cfg["live"],
         raw_dir=ROOT / paths["raw"],
         processed_dir=ROOT / paths["processed"],
         backtests_dir=ROOT / paths["backtests"],

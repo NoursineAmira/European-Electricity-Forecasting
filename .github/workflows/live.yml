@@ -1,0 +1,58 @@
+name: Live forecast
+
+# Twice a day: the 18:00 run replaces the 12:00 one in case some data before the 09:00 UTC
+# cut-off arrived late. Both only use data up to 09:00.
+on:
+  schedule:
+    - cron: "0 12 * * *"
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      REMOTE: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+      PYTHONWARNINGS: ignore
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - run: pip install -e .
+
+      - name: Restore downloaded data
+        uses: actions/cache@v4
+        with:
+          path: data/raw
+          key: raw-${{ github.run_id }}
+          restore-keys: raw-
+
+      - name: Get the published history
+        run: git clone -q --depth 1 --branch live "$REMOTE" live || mkdir live
+
+      - name: Forecast tomorrow
+        run: energy-forecast live --out live
+
+      - name: Publish to the live branch
+        working-directory: live
+        run: |
+          rm -rf .git
+          git init -q -b live
+          git add history.csv recent.csv status.json
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "Forecast issued $(jq -r .issued status.json)"
+          git push -q --force "$REMOTE" live

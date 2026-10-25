@@ -1,12 +1,13 @@
 import argparse
+from pathlib import Path
 
 import pandas as pd
 
-from . import experiment, pipeline
+from . import experiment, live, pipeline
 from .config import load_config
 from .models import MODEL_NAMES
 
-COMMANDS = ["fetch", "build", "validate", "all", "tune", "backtest", "evaluate", "intervals", "significance"]
+COMMANDS = ["fetch", "build", "validate", "all", "tune", "backtest", "evaluate", "intervals", "significance", "live"]
 
 
 def main() -> None:
@@ -15,6 +16,7 @@ def main() -> None:
     parser.add_argument("--countries", nargs="+", help="country codes (default: all in config)")
     parser.add_argument("--targets", nargs="+", choices=pipeline.TARGETS, default=list(pipeline.TARGETS))
     parser.add_argument("--models", nargs="+", choices=MODEL_NAMES, default=MODEL_NAMES)
+    parser.add_argument("--out", type=Path, default=Path("live"), help="output folder for `live`")
     args = parser.parse_args()
 
     cfg = load_config()
@@ -26,6 +28,8 @@ def main() -> None:
     with pd.option_context("display.width", 200, "display.max_columns", None):
         if args.command == "tune":
             print(experiment.tune(cfg, countries, args.targets).to_string(index=False))
+        elif args.command == "live":
+            print(live.run_live(cfg, args.out).groupby(["country", "target"])["data_complete"].first().to_string())
         elif args.command == "backtest":
             experiment.run_backtests(cfg, countries, args.targets, args.models)
         elif args.command in ("evaluate", "intervals", "significance"):
