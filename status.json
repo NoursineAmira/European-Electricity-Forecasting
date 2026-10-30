@@ -1,0 +1,14 @@
+{
+  "issued": "2026-10-30",
+  "run_at_utc": "2026-10-30 21:58",
+  "data_cut_utc": "2026-10-30 09:00",
+  "data_complete": {
+    "de/load_mw": true,
+    "de/price_eur_mwh": true,
+    "es/load_mw": true,
+    "fr/load_mw": true,
+    "fr/price_eur_mwh": true,
+    "nl/load_mw": true,
+    "nl/price_eur_mwh": true
+  }
+}
